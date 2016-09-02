@@ -7,6 +7,40 @@ func rnd() -> CGFloat {
     return CGFloat(arc4random_uniform(255))/255.0
 }
 
+func distanceBetween(p1 : CGPoint, p2 : CGPoint) -> CGFloat {
+    let dx : CGFloat = p1.x - p2.x
+    let dy : CGFloat = p1.y - p2.y
+    return sqrt(dx * dx + dy * dy)
+}
+
+class InflateBehavior : UIDynamicBehavior {
+    var view: UIView?
+    var point: CGPoint?  //a point close to which we inflate the view
+    var maxInflation: CGFloat = 1.5 //max inflation in % of the original size
+    var minInflation: CGFloat = 0.75
+    var distThreshold: CGFloat = 100
+    override init() {
+        super.init()
+        action = { [unowned self] in
+            guard let view = self.view,
+                let point = self.point else {
+                return
+            }
+            let d = CGFloat(distanceBetween(p1: view.center, p2: point))
+            
+            let diff:CGFloat = (self.maxInflation - self.minInflation)
+            let startScale = self.minInflation + diff/2
+            var scale: CGFloat = startScale + diff * (self.distThreshold/2 - d)/self.distThreshold/2
+            if scale > self.maxInflation {
+                scale = self.maxInflation
+            } else if scale < self.minInflation {
+                scale = self.minInflation
+            }
+            view.layer.transform = CATransform3DScale(CATransform3DIdentity, scale, scale, 1)
+            
+        }
+    }
+}
 
 class DialMenu : UIView {
     var itemViews: [UIView] = [] {
@@ -17,7 +51,7 @@ class DialMenu : UIView {
     var snap: UISnapBehavior?
     var animator: UIDynamicAnimator?
     var snapPoints: [CGPoint] = []
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         setup()
@@ -29,6 +63,7 @@ class DialMenu : UIView {
     }
     
     func setup() {
+        animator = UIDynamicAnimator(referenceView: self)
         let N = Float(self.itemViews.count)
         let r = Float(100)
         for i in 0..<self.itemViews.count {
@@ -50,12 +85,12 @@ class DialMenu : UIView {
                 v.center = self.snapPoints[i]
             }
         }) { finished in
-            self.makeDynamic()
+            self.applyAttachments()
+            self.applyInflate()
         }
     }
     
-    func makeDynamic() {
-        animator = UIDynamicAnimator(referenceView: self)
+    func applyAttachments() {
 
         var prev: UIView?
         
@@ -73,7 +108,15 @@ class DialMenu : UIView {
 
             prev = v
         }
-  
+    }
+    
+    func applyInflate() {
+        self.itemViews.forEach {
+            let inflate = InflateBehavior()
+            inflate.view = $0
+            inflate.point = self.snapPoints[0]
+            animator?.addBehavior(inflate)
+        }
     }
     
     func onPan(recognizer: UIPanGestureRecognizer) {
@@ -104,12 +147,6 @@ class DialMenu : UIView {
             }
         }
         return result
-    }
-    
-    public func distanceBetween(p1 : CGPoint, p2 : CGPoint) -> CGFloat {
-        let dx : CGFloat = p1.x - p2.x
-        let dy : CGFloat = p1.y - p2.y
-        return sqrt(dx * dx + dy * dy)
     }
 }
 
